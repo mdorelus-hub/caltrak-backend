@@ -21,12 +21,35 @@ export default async function handler(req, res) {
   ? JSON.parse(req.body)
   : req.body || {};
 
+if (!req.body) {
+  return res.status(400).json({
+    success: false,
+    error: "Missing request body"
+  });
+}
+
+let body = req.body;
+
+// If Vercel sends body as a string, convert it
+if (typeof body === "string") {
+  try {
+    body = JSON.parse(body);
+  } catch (e) {
+    return res.status(400).json({
+      success: false,
+      error: "Invalid JSON body"
+    });
+  }
+}
+
 const imageBase64 = body.imageBase64;
 
-    if (!imageBase64) {
-      return res.status(400).json({ error: "No image provided" });
-    }
-
+if (!imageBase64) {
+  return res.status(400).json({
+    success: false,
+    error: "No image provided"
+  });
+}
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
