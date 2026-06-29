@@ -1,5 +1,8 @@
 {
   "name": "caltrak-backend",
   "version": "1.0.0",
-  "private": true
+  "private": true,
+  "dependencies": {
+    "@google/genai": "^1.29.0"
+  }
 }
