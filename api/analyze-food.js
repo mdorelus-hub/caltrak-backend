@@ -44,18 +44,36 @@ export default async function handler(req, res) {
             {
               parts: [
                 {
-                  text: `
-Analyze this food image and return ONLY valid JSON in this format:
+               text: `
+You are a professional nutrition AI analyzing food images.
+
+Analyze the image and return ONLY valid JSON.
+
+IMPORTANT RULES:
+- Return ONLY JSON (no markdown, no explanation, no extra text)
+- Estimate portion sizes visually
+- Be as accurate as possible
+- If unsure, lower confidenceScore
+
+Return in this exact format:
 
 {
-  "food": "",
+  "food": "string (describe the meal clearly)",
   "calories": number,
   "protein": number,
   "carbs": number,
-  "fat": number
+  "fat": number,
+  "confidenceScore": number
 }
 
-Be accurate and estimate portion sizes based on visible food.
+Confidence score rules:
+- 90–100: very clear, easy to identify food + portion
+- 70–89: mostly clear but minor uncertainty
+- 50–69: mixed or partially unclear ingredients
+- below 50: unclear, blurry, or hard to estimate
+
+Now analyze the image.
+`
 `
                 },
                 {
