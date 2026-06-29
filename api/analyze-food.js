@@ -1,5 +1,18 @@
 export default async function handler(req, res) {
+  // =========================
+  // CORS (FIX FOR FIREBASE)
+  // =========================
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  // Handle preflight request
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
   try {
+    // Only allow POST
     if (req.method !== "POST") {
       return res.status(405).json({ error: "Use POST" });
     }
@@ -12,6 +25,13 @@ export default async function handler(req, res) {
 
     const apiKey = process.env.GEMINI_API_KEY;
 
+    if (!apiKey) {
+      return res.status(500).json({ error: "Missing GEMINI_API_KEY" });
+    }
+
+    // =========================
+    // CALL GEMINI API
+    // =========================
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
@@ -25,7 +45,8 @@ export default async function handler(req, res) {
               parts: [
                 {
                   text: `
-Analyze this food image and return ONLY JSON in this format:
+Analyze this food image and return ONLY valid JSON in this format:
+
 {
   "food": "",
   "calories": number,
@@ -33,7 +54,8 @@ Analyze this food image and return ONLY JSON in this format:
   "carbs": number,
   "fat": number
 }
-Be accurate and estimate portions from the image.
+
+Be accurate and estimate portion sizes based on visible food.
 `
                 },
                 {
@@ -51,15 +73,16 @@ Be accurate and estimate portions from the image.
 
     const data = await response.json();
 
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    const text =
+      data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      result: text ? JSON.parse(text) : data
+      result: text
     });
 
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: error.message
     });
