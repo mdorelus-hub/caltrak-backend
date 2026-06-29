@@ -76,10 +76,11 @@ Be accurate and estimate portion sizes based on visible food.
     const text =
       data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
-    return res.status(200).json({
-      success: true,
-      result: text
-    });
+   return res.status(200).json({
+  success: true,
+  result: text,
+  raw: data
+});
 
   } catch (error) {
     return res.status(500).json({
