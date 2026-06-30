@@ -16,13 +16,19 @@ export default async function handler(req, res) {
     const { imageBase64 } = req.body || {};
 
     if (!imageBase64) {
-      return res.status(400).json({ error: "No image provided" });
+      return res.status(400).json({
+        success: false,
+        error: "No image provided"
+      });
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
-      return res.status(500).json({ error: "Missing GEMINI_API_KEY" });
+      return res.status(500).json({
+        success: false,
+        error: "Missing GEMINI_API_KEY"
+      });
     }
 
     const response = await fetch(
@@ -30,7 +36,7 @@ export default async function handler(req, res) {
       {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           contents: [
@@ -38,18 +44,17 @@ export default async function handler(req, res) {
               parts: [
                 {
                   text: `
-You are a nutrition AI.
+Analyze this food image.
 
-Return ONLY valid JSON. No markdown. No explanation.
+Return ONLY JSON:
 
-Format:
 {
-  "food": "string",
-  "calories": number,
-  "protein": number,
-  "carbs": number,
-  "fat": number,
-  "confidenceScore": number
+  "food": "",
+  "calories": 0,
+  "protein": 0,
+  "carbs": 0,
+  "fat": 0,
+  "confidenceScore": 0
 }
 `
                 },
@@ -62,39 +67,58 @@ Format:
               ]
             }
           ]
-        }),
+        })
       }
     );
 
-    // 🔥 SAFE TEXT HANDLING (NO JSON PARSE YET)
-    const rawText = await response.text();
+    const raw = await response.text();
+
+    let data;
+
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      return res.status(500).json({
+        success: false,
+        error: "Gemini returned invalid JSON",
+        raw
+      });
+    }
 
     if (!response.ok) {
       return res.status(500).json({
         success: false,
-        error: "Gemini API failed",
-        details: rawText
+        error: "Gemini API request failed",
+        details: data
       });
     }
 
-    let data;
-    try {
-      data = JSON.parse(rawText);
-    } catch (e) {
+    const candidate = data?.candidates?.[0];
+
+    if (!candidate) {
       return res.status(500).json({
         success: false,
-        error: "Gemini returned non-JSON response",
-        raw: rawText
+        error: "No candidates returned",
+        details: data
       });
     }
 
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (candidate.finishReason && candidate.finishReason !== "STOP") {
+      return res.status(500).json({
+        success: false,
+        error: "Generation stopped",
+        finishReason: candidate.finishReason,
+        details: data
+      });
+    }
+
+    const text = candidate?.content?.parts?.[0]?.text;
 
     if (!text) {
       return res.status(500).json({
         success: false,
-        error: "Empty Gemini response",
-        raw: data
+        error: "Candidate contained no text",
+        details: data
       });
     }
 
@@ -103,36 +127,37 @@ Format:
     if (!match) {
       return res.status(500).json({
         success: false,
-        error: "No JSON found in model output",
+        error: "No JSON found in Gemini output",
         raw: text
       });
     }
 
     let parsed;
+
     try {
       parsed = JSON.parse(match[0]);
-    } catch (err) {
+    } catch {
       return res.status(500).json({
         success: false,
-        error: "Invalid JSON format from model",
+        error: "Gemini JSON could not be parsed",
         raw: text
       });
     }
 
     return res.status(200).json({
       success: true,
-      food: parsed.food || "Unknown",
-      calories: parsed.calories || 0,
-      protein: parsed.protein || 0,
-      carbs: parsed.carbs || 0,
-      fat: parsed.fat || 0,
-      confidenceScore: parsed.confidenceScore ?? 0
+      food: parsed.food ?? "Unknown",
+      calories: Number(parsed.calories) || 0,
+      protein: Number(parsed.protein) || 0,
+      carbs: Number(parsed.carbs) || 0,
+      fat: Number(parsed.fat) || 0,
+      confidenceScore: Number(parsed.confidenceScore) || 0
     });
 
   } catch (error) {
     return res.status(500).json({
       success: false,
-      error: error.message
+      error: error instanceof Error ? error.message : String(error)
     });
   }
 }
