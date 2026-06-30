@@ -39,10 +39,12 @@ export default async function handler(req, res) {
               parts: [
                 {
                   text: `
-Analyze this food image and return ONLY valid JSON:
+You are a nutrition analysis AI.
+
+Analyze the food image and return ONLY valid JSON (no markdown, no explanations):
 
 {
-  "food": "",
+  "food": "string",
   "calories": number,
   "protein": number,
   "carbs": number,
@@ -66,11 +68,44 @@ Analyze this food image and return ONLY valid JSON:
 
     const data = await response.json();
 
+    if (!response.ok) {
+      return res.status(500).json({
+        success: false,
+        error: "Gemini API error",
+        details: data
+      });
+    }
+
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!text) {
+      return res.status(500).json({
+        success: false,
+        error: "No response from Gemini"
+      });
+    }
+
+    // Clean Gemini output (VERY important)
+    const cleaned = text
+      .replace(/```json/g, "")
+      .replace(/```/g, "")
+      .trim();
+
+    let parsed;
+
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        error: "Failed to parse Gemini response",
+        raw: text
+      });
+    }
 
     return res.status(200).json({
       success: true,
-      result: text
+      ...parsed
     });
 
   } catch (error) {
