@@ -39,10 +39,11 @@ export default async function handler(req, res) {
               parts: [
                 {
                   text: `
-You are a nutrition analysis AI.
+You are a nutrition AI.
 
-Analyze the food image and return ONLY valid JSON (no markdown, no explanations):
+Return ONLY valid JSON. No text. No markdown.
 
+JSON format:
 {
   "food": "string",
   "calories": number,
@@ -68,6 +69,7 @@ Analyze the food image and return ONLY valid JSON (no markdown, no explanations)
 
     const data = await response.json();
 
+    // 🔴 HARD SAFETY CHECK (prevents silent crashes)
     if (!response.ok) {
       return res.status(500).json({
         success: false,
@@ -81,31 +83,43 @@ Analyze the food image and return ONLY valid JSON (no markdown, no explanations)
     if (!text) {
       return res.status(500).json({
         success: false,
-        error: "No response from Gemini"
+        error: "Empty response from Gemini",
+        raw: data
       });
     }
 
-    // Clean Gemini output (VERY important)
-    const cleaned = text
-      .replace(/```json/g, "")
-      .replace(/```/g, "")
-      .trim();
+    // 🔥 Extract JSON even if Gemini adds extra text
+    const match = text.match(/\{[\s\S]*\}/);
 
-    let parsed;
-
-    try {
-      parsed = JSON.parse(cleaned);
-    } catch (error) {
+    if (!match) {
       return res.status(500).json({
         success: false,
-        error: "Failed to parse Gemini response",
+        error: "No JSON found in response",
         raw: text
       });
     }
 
+    let parsed;
+
+    try {
+      parsed = JSON.parse(match[0]);
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        error: "Invalid JSON format",
+        raw: text
+      });
+    }
+
+    // ✅ FINAL CLEAN RESPONSE
     return res.status(200).json({
       success: true,
-      ...parsed
+      food: parsed.food || "Unknown",
+      calories: parsed.calories || 0,
+      protein: parsed.protein || 0,
+      carbs: parsed.carbs || 0,
+      fat: parsed.fat || 0,
+      confidenceScore: parsed.confidenceScore ?? 0
     });
 
   } catch (error) {
