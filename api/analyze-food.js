@@ -13,8 +13,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const body = req.body || {};
-    const imageBase64 = body.imageBase64;
+    const { imageBase64 } = req.body || {};
 
     if (!imageBase64) {
       return res.status(400).json({ error: "No image provided" });
@@ -41,9 +40,9 @@ export default async function handler(req, res) {
                   text: `
 You are a nutrition AI.
 
-Return ONLY valid JSON. No text. No markdown.
+Return ONLY valid JSON. No markdown. No explanation.
 
-JSON format:
+Format:
 {
   "food": "string",
   "calories": number,
@@ -67,14 +66,25 @@ JSON format:
       }
     );
 
-    const data = await response.json();
+    // 🔥 SAFE TEXT HANDLING (NO JSON PARSE YET)
+    const rawText = await response.text();
 
-    // 🔴 HARD SAFETY CHECK (prevents silent crashes)
     if (!response.ok) {
       return res.status(500).json({
         success: false,
-        error: "Gemini API error",
-        details: data
+        error: "Gemini API failed",
+        details: rawText
+      });
+    }
+
+    let data;
+    try {
+      data = JSON.parse(rawText);
+    } catch (e) {
+      return res.status(500).json({
+        success: false,
+        error: "Gemini returned non-JSON response",
+        raw: rawText
       });
     }
 
@@ -83,35 +93,32 @@ JSON format:
     if (!text) {
       return res.status(500).json({
         success: false,
-        error: "Empty response from Gemini",
+        error: "Empty Gemini response",
         raw: data
       });
     }
 
-    // 🔥 Extract JSON even if Gemini adds extra text
     const match = text.match(/\{[\s\S]*\}/);
 
     if (!match) {
       return res.status(500).json({
         success: false,
-        error: "No JSON found in response",
+        error: "No JSON found in model output",
         raw: text
       });
     }
 
     let parsed;
-
     try {
       parsed = JSON.parse(match[0]);
-    } catch (error) {
+    } catch (err) {
       return res.status(500).json({
         success: false,
-        error: "Invalid JSON format",
+        error: "Invalid JSON format from model",
         raw: text
       });
     }
 
-    // ✅ FINAL CLEAN RESPONSE
     return res.status(200).json({
       success: true,
       food: parsed.food || "Unknown",
